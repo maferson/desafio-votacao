@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: votacao
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/votacao}
+    username: ${DB_USERNAME:votacao}
+    password: ${DB_PASSWORD:votacao}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
