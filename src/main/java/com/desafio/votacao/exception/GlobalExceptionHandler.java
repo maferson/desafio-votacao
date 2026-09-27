@@ -36,4 +36,36 @@ public class GlobalExceptionHandler {
                 .badRequest()
                 .body(response);
     }
+
+    @ExceptionHandler(RecursoNaoEncontradoException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotFound(
+            RecursoNaoEncontradoException exception
+    ) {
+        var response = new ApiErrorResponse(
+                OffsetDateTime.now(),
+                HttpStatus.NOT_FOUND.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
+
+    @ExceptionHandler(ConflitoNegocioException.class)
+    public ResponseEntity<ApiErrorResponse> handleConflict(
+            ConflitoNegocioException exception
+    ) {
+        var response = new ApiErrorResponse(
+                OffsetDateTime.now(),
+                HttpStatus.CONFLICT.value(),
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
+    }
 }
