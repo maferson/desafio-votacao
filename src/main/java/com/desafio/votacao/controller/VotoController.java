@@ -4,6 +4,7 @@ import com.desafio.votacao.dto.voto.RegistrarVotoRequest;
 import com.desafio.votacao.dto.voto.ResultadoVotacaoResponse;
 import com.desafio.votacao.dto.voto.VotoResponse;
 import com.desafio.votacao.service.VotoService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 
+@Tag(name = "Votos", description = "Registro de votos e consulta de resultados")
 @RestController
 @RequestMapping("/api/v1/pautas/{pautaId}/votos")
 public class VotoController {
