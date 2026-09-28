@@ -1,10 +1,12 @@
 package com.desafio.votacao.controller;
 
 import com.desafio.votacao.dto.voto.RegistrarVotoRequest;
+import com.desafio.votacao.dto.voto.ResultadoVotacaoResponse;
 import com.desafio.votacao.dto.voto.VotoResponse;
 import com.desafio.votacao.service.VotoService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,5 +40,14 @@ public class VotoController {
                         )
                 )
                 .body(response);
+    }
+
+    @GetMapping("/resultado")
+    public ResponseEntity<ResultadoVotacaoResponse> resultado(
+            @PathVariable Long pautaId
+    ) {
+        return ResponseEntity.ok(
+                votoService.resultado(pautaId)
+        );
     }
 }

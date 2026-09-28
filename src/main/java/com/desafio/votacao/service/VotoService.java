@@ -1,10 +1,13 @@
 package com.desafio.votacao.service;
 
 import com.desafio.votacao.dto.voto.RegistrarVotoRequest;
+import com.desafio.votacao.dto.voto.ResultadoVotacaoResponse;
 import com.desafio.votacao.dto.voto.VotoResponse;
+import com.desafio.votacao.entity.TipoVoto;
 import com.desafio.votacao.entity.Voto;
 import com.desafio.votacao.exception.ConflitoNegocioException;
 import com.desafio.votacao.exception.RecursoNaoEncontradoException;
+import com.desafio.votacao.repository.PautaRepository;
 import com.desafio.votacao.repository.SessaoVotacaoRepository;
 import com.desafio.votacao.repository.VotoRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,13 +19,16 @@ import java.time.OffsetDateTime;
 @Service
 public class VotoService {
 
+    private final PautaRepository pautaRepository;
     private final SessaoVotacaoRepository sessaoVotacaoRepository;
     private final VotoRepository votoRepository;
 
     public VotoService(
+            PautaRepository pautaRepository,
             SessaoVotacaoRepository sessaoVotacaoRepository,
             VotoRepository votoRepository
     ) {
+        this.pautaRepository = pautaRepository;
         this.sessaoVotacaoRepository = sessaoVotacaoRepository;
         this.votoRepository = votoRepository;
     }
@@ -74,10 +80,38 @@ public class VotoService {
                     votoSalvo.getOpcao(),
                     votoSalvo.getCreatedAt()
             );
+
         } catch (DataIntegrityViolationException exception) {
             throw new ConflitoNegocioException(
                     "Associado já votou nesta pauta"
             );
         }
+    }
+
+    @Transactional(readOnly = true)
+    public ResultadoVotacaoResponse resultado(Long pautaId) {
+
+        if (!pautaRepository.existsById(pautaId)) {
+            throw new RecursoNaoEncontradoException(
+                    "Pauta não encontrada"
+            );
+        }
+
+        long votosSim = votoRepository.countByPauta_IdAndOpcao(
+                pautaId,
+                TipoVoto.SIM
+        );
+
+        long votosNao = votoRepository.countByPauta_IdAndOpcao(
+                pautaId,
+                TipoVoto.NAO
+        );
+
+        return new ResultadoVotacaoResponse(
+                pautaId,
+                votosSim,
+                votosNao,
+                votosSim + votosNao
+        );
     }
 }
