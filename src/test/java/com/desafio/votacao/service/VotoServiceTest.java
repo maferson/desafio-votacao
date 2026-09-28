@@ -1,5 +1,7 @@
 package com.desafio.votacao.service;
 
+import com.desafio.votacao.client.AssociadoClient;
+import com.desafio.votacao.client.StatusVotoAssociado;
 import com.desafio.votacao.dto.voto.RegistrarVotoRequest;
 import com.desafio.votacao.dto.voto.ResultadoVotacaoResponse;
 import com.desafio.votacao.dto.voto.VotoResponse;
@@ -32,7 +34,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class VotoServiceTest {
 
-    static final Long PAUTA_ID = 1L;
+    private static final Long PAUTA_ID = 1L;
     private static final String ASSOCIADO_ID = "ASSOCIADO-001";
 
     @InjectMocks
@@ -47,15 +49,20 @@ class VotoServiceTest {
     @Mock
     private VotoRepository votoRepository;
 
+    @Mock
+    private AssociadoClient associadoClient;
+
     @Test
     void deveRegistrarVotoComSucesso() {
         givenSessaoAberta();
         givenAssociadoAindaNaoVotou();
+        givenAssociadoAptoParaVotar();
         givenVotoSalvoComSucesso();
 
         VotoResponse response = whenRegistrarVoto(TipoVoto.SIM);
 
         thenVotoDeveSerRegistrado(response, TipoVoto.SIM);
+        thenAssociadoDeveSerConsultado();
         thenVotoDeveSerSalvo();
     }
 
@@ -91,9 +98,52 @@ class VotoServiceTest {
     void deveTratarConcorrenciaDeVotoDuplicado() {
         givenSessaoAberta();
         givenAssociadoAindaNaoVotou();
+        givenAssociadoAptoParaVotar();
         givenErroDeIntegridadeAoSalvarVoto();
 
         whenRegistrarVotoThenExpectConflito(TipoVoto.SIM);
+
+        thenVotoDeveSerTentadoSalvar();
+    }
+
+    @Test
+    void naoDeveRegistrarVotoQuandoAssociadoNaoEstiverApto() {
+        givenSessaoAberta();
+        givenAssociadoAindaNaoVotou();
+        givenAssociadoNaoAptoParaVotar();
+
+        RecursoNaoEncontradoException exception =
+                whenRegistrarVotoThenExpectRecursoNaoEncontrado(
+                        TipoVoto.SIM
+                );
+
+        thenMensagemDeErroDeveSer(
+                exception,
+                "Associado não está apto a votar"
+        );
+
+        thenAssociadoDeveSerConsultado();
+        thenVotoNaoDeveSerSalvo();
+    }
+
+    @Test
+    void naoDeveRegistrarVotoQuandoCpfForInvalido() {
+        givenSessaoAberta();
+        givenAssociadoAindaNaoVotou();
+        givenCpfInvalido();
+
+        RecursoNaoEncontradoException exception =
+                whenRegistrarVotoThenExpectRecursoNaoEncontrado(
+                        TipoVoto.SIM
+                );
+
+        thenMensagemDeErroDeveSer(
+                exception,
+                "CPF inválido"
+        );
+
+        thenAssociadoDeveSerConsultado();
+        thenVotoNaoDeveSerSalvo();
     }
 
     @Test
@@ -166,9 +216,30 @@ class VotoServiceTest {
         )).thenReturn(true);
     }
 
+    private void givenAssociadoAptoParaVotar() {
+        when(associadoClient.consultarSituacao(ASSOCIADO_ID))
+                .thenReturn(StatusVotoAssociado.ABLE_TO_VOTE);
+    }
+
+    private void givenAssociadoNaoAptoParaVotar() {
+        when(associadoClient.consultarSituacao(ASSOCIADO_ID))
+                .thenReturn(StatusVotoAssociado.UNABLE_TO_VOTE);
+    }
+
+    private void givenCpfInvalido() {
+        when(associadoClient.consultarSituacao(ASSOCIADO_ID))
+                .thenThrow(
+                        new RecursoNaoEncontradoException(
+                                "CPF inválido"
+                        )
+                );
+    }
+
     private void givenVotoSalvoComSucesso() {
         when(votoRepository.saveAndFlush(any(Voto.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(
+                        invocation -> invocation.getArgument(0)
+                );
     }
 
     private void givenErroDeIntegridadeAoSalvarVoto() {
@@ -224,10 +295,11 @@ class VotoServiceTest {
         );
     }
 
-    private void whenRegistrarVotoThenExpectRecursoNaoEncontrado(
+    private RecursoNaoEncontradoException
+    whenRegistrarVotoThenExpectRecursoNaoEncontrado(
             TipoVoto tipoVoto
     ) {
-        assertThrows(
+        return assertThrows(
                 RecursoNaoEncontradoException.class,
                 () -> whenRegistrarVoto(tipoVoto)
         );
@@ -260,7 +332,17 @@ class VotoServiceTest {
         );
     }
 
+    private void thenAssociadoDeveSerConsultado() {
+        verify(associadoClient)
+                .consultarSituacao(ASSOCIADO_ID);
+    }
+
     private void thenVotoDeveSerSalvo() {
+        verify(votoRepository)
+                .saveAndFlush(any(Voto.class));
+    }
+
+    private void thenVotoDeveSerTentadoSalvar() {
         verify(votoRepository)
                 .saveAndFlush(any(Voto.class));
     }
@@ -268,6 +350,16 @@ class VotoServiceTest {
     private void thenVotoNaoDeveSerSalvo() {
         verify(votoRepository, never())
                 .saveAndFlush(any(Voto.class));
+    }
+
+    private void thenMensagemDeErroDeveSer(
+            RecursoNaoEncontradoException exception,
+            String mensagemEsperada
+    ) {
+        assertEquals(
+                mensagemEsperada,
+                exception.getMessage()
+        );
     }
 
     private void thenResultadoDeveSer(

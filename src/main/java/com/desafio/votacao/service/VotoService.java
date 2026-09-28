@@ -1,8 +1,11 @@
 package com.desafio.votacao.service;
 
+import com.desafio.votacao.client.AssociadoClient;
+import com.desafio.votacao.client.StatusVotoAssociado;
 import com.desafio.votacao.dto.voto.RegistrarVotoRequest;
 import com.desafio.votacao.dto.voto.ResultadoVotacaoResponse;
 import com.desafio.votacao.dto.voto.VotoResponse;
+import com.desafio.votacao.entity.SessaoVotacao;
 import com.desafio.votacao.entity.TipoVoto;
 import com.desafio.votacao.entity.Voto;
 import com.desafio.votacao.exception.ConflitoNegocioException;
@@ -22,15 +25,18 @@ public class VotoService {
     private final PautaRepository pautaRepository;
     private final SessaoVotacaoRepository sessaoVotacaoRepository;
     private final VotoRepository votoRepository;
+    private final AssociadoClient associadoClient;
 
     public VotoService(
             PautaRepository pautaRepository,
             SessaoVotacaoRepository sessaoVotacaoRepository,
-            VotoRepository votoRepository
+            VotoRepository votoRepository,
+            AssociadoClient associadoClient
     ) {
         this.pautaRepository = pautaRepository;
         this.sessaoVotacaoRepository = sessaoVotacaoRepository;
         this.votoRepository = votoRepository;
+        this.associadoClient = associadoClient;
     }
 
     @Transactional
@@ -38,14 +44,15 @@ public class VotoService {
             Long pautaId,
             RegistrarVotoRequest request
     ) {
-        var sessao = sessaoVotacaoRepository.findByPauta_Id(pautaId)
-                .orElseThrow(() ->
-                        new RecursoNaoEncontradoException(
+        SessaoVotacao sessao = sessaoVotacaoRepository
+                .findByPauta_Id(pautaId)
+                .orElseThrow(
+                        () -> new RecursoNaoEncontradoException(
                                 "Sessão de votação não encontrada"
                         )
                 );
 
-        var agora = OffsetDateTime.now();
+        OffsetDateTime agora = OffsetDateTime.now();
 
         if (!agora.isBefore(sessao.getFim())) {
             throw new ConflitoNegocioException(
@@ -53,7 +60,7 @@ public class VotoService {
             );
         }
 
-        var associadoId = request.associadoId().trim();
+        String associadoId = request.associadoId().trim();
 
         if (votoRepository.existsByPauta_IdAndAssociadoId(
                 pautaId,
@@ -64,14 +71,23 @@ public class VotoService {
             );
         }
 
-        var voto = new Voto(
+        StatusVotoAssociado status =
+                associadoClient.consultarSituacao(associadoId);
+
+        if (status != StatusVotoAssociado.ABLE_TO_VOTE) {
+            throw new RecursoNaoEncontradoException(
+                    "Associado não está apto a votar"
+            );
+        }
+
+        Voto voto = new Voto(
                 sessao.getPauta(),
                 associadoId,
                 request.opcao()
         );
 
         try {
-            var votoSalvo = votoRepository.saveAndFlush(voto);
+            Voto votoSalvo = votoRepository.saveAndFlush(voto);
 
             return new VotoResponse(
                     votoSalvo.getId(),
@@ -80,7 +96,6 @@ public class VotoService {
                     votoSalvo.getOpcao(),
                     votoSalvo.getCreatedAt()
             );
-
         } catch (DataIntegrityViolationException exception) {
             throw new ConflitoNegocioException(
                     "Associado já votou nesta pauta"
@@ -90,28 +105,27 @@ public class VotoService {
 
     @Transactional(readOnly = true)
     public ResultadoVotacaoResponse resultado(Long pautaId) {
-
         if (!pautaRepository.existsById(pautaId)) {
             throw new RecursoNaoEncontradoException(
                     "Pauta não encontrada"
             );
         }
 
-        long votosSim = votoRepository.countByPauta_IdAndOpcao(
+        long sim = votoRepository.countByPauta_IdAndOpcao(
                 pautaId,
                 TipoVoto.SIM
         );
 
-        long votosNao = votoRepository.countByPauta_IdAndOpcao(
+        long nao = votoRepository.countByPauta_IdAndOpcao(
                 pautaId,
                 TipoVoto.NAO
         );
 
         return new ResultadoVotacaoResponse(
                 pautaId,
-                votosSim,
-                votosNao,
-                votosSim + votosNao
+                sim,
+                nao,
+                sim + nao
         );
     }
 }
