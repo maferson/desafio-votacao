@@ -17,8 +17,12 @@ A aplicação permite cadastrar pautas, abrir sessões de votação, registrar v
 - Maven
 - JUnit 5
 - Mockito
+- MockMvc
 - Testcontainers
 - Swagger / OpenAPI
+- k6
+
+---
 
 ## Funcionalidades
 
@@ -36,6 +40,10 @@ A API possui as seguintes funcionalidades:
 - Tratamento padronizado de erros
 - Persistência dos dados em PostgreSQL
 - Versionamento da API através de `/api/v1`
+- Documentação com Swagger / OpenAPI
+- Testes automatizados
+- Testes de integração com PostgreSQL real
+- Teste de carga e performance com k6
 
 ---
 
@@ -311,7 +319,7 @@ A utilização de uma interface permite substituir futuramente a implementação
 
 # Tratamento de erros
 
-A API utiliza um tratamento centralizado de exceptions através de `@RestControllerAdvice`.
+A API utiliza tratamento centralizado de exceptions através de `@RestControllerAdvice`.
 
 Alguns status utilizados:
 
@@ -427,6 +435,103 @@ mvn clean install
 
 ---
 
+# Teste de carga e performance
+
+Foi utilizado o **k6** para realizar um teste de carga sobre o endpoint de registro de votos.
+
+Durante o cenário, a carga foi aumentada gradualmente até **100 usuários virtuais concorrentes**.
+
+Para evitar que a aleatoriedade do `FakeAssociadoClient` interferisse na medição, foi criado o profile `performance`.
+
+Nesse profile, o `PerformanceAssociadoClient` retorna sempre:
+
+```text
+ABLE_TO_VOTE
+```
+
+permitindo que o teste meça principalmente o comportamento da API, persistência e banco de dados sob carga.
+
+A estrutura utilizada durante o teste foi:
+
+```text
+k6
+ ↓
+API Spring Boot
+ ↓
+VotoService
+ ↓
+PostgreSQL
+```
+
+## Cenário executado
+
+O teste foi configurado com aumento gradual de carga:
+
+```text
+0 → 10 usuários
+10 → 50 usuários
+50 → 100 usuários
+100 → 0 usuários
+```
+
+A execução principal teve duração aproximada de **1 minuto e 40 segundos**.
+
+## Resultados
+
+| Métrica | Resultado |
+| --- | ---: |
+| Usuários virtuais máximos | 100 |
+| Requisições HTTP | 37.145 |
+| Votos registrados com sucesso | 37.131 |
+| Taxa de sucesso | 99,96% |
+| Taxa de erro | 0,03% |
+| Throughput médio | ~322 req/s |
+| Tempo médio de resposta | 8,73 ms |
+| p90 | 12,91 ms |
+| p95 | 14,96 ms |
+| Tempo máximo observado | 378,75 ms |
+
+Os thresholds definidos para o teste foram:
+
+```text
+p95 < 1000 ms
+taxa de erro < 1%
+```
+
+Ambos foram atendidos.
+
+Durante a execução ocorreram 12 timeouts de comunicação, representando aproximadamente **0,03%** das requisições.
+
+O script utilizado está disponível em:
+
+```text
+performance/vote-load-test.js
+```
+
+## Como executar o teste de carga
+
+Primeiro, execute a aplicação utilizando o profile de performance:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=performance
+```
+
+Em outro terminal, execute o k6 através do Docker:
+
+```bash
+docker run --rm -i grafana/k6 run - < performance/vote-load-test.js
+```
+
+No Windows com IntelliJ também é possível configurar:
+
+```text
+Active profiles: performance
+```
+
+Esse profile existe exclusivamente para tornar a validação do associado determinística durante o teste de carga.
+
+---
+
 # Decisões técnicas
 
 ## Regra de voto único no banco
@@ -476,6 +581,48 @@ As verificações realizadas pela aplicação fornecem respostas amigáveis ao c
 
 Entretanto, regras críticas também são protegidas através de constraints no banco de dados, evitando condições de corrida.
 
+A aplicação também trata possíveis violações de integridade durante a persistência, mantendo a regra mesmo quando requisições concorrentes ultrapassam a validação inicial.
+
+---
+
+## Integração externa desacoplada
+
+A validação do associado foi abstraída através da interface:
+
+```text
+AssociadoClient
+```
+
+O `VotoService` depende dessa abstração e não diretamente da implementação fake.
+
+Isso permite substituir futuramente:
+
+```text
+FakeAssociadoClient
+```
+
+por uma implementação HTTP real sem alterar a regra principal de votação.
+
+---
+
+## Profile de performance
+
+Durante testes de carga, respostas aleatórias do serviço fake poderiam produzir erros que não representam degradação de performance.
+
+Por esse motivo foi criado:
+
+```text
+PerformanceAssociadoClient
+```
+
+ativado somente através do profile:
+
+```text
+performance
+```
+
+Na execução normal continua sendo utilizado o comportamento fake definido para o desafio.
+
 ---
 
 ## Versionamento
@@ -511,7 +658,7 @@ Funcionalidades principais concluídas:
 - [x] Testes de controller
 - [x] Testes de integração com PostgreSQL
 - [x] Swagger / OpenAPI
-- [ ] Teste de carga e performance
+- [x] Teste de carga e performance
 
 ---
 
