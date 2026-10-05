@@ -4,9 +4,12 @@ import com.desafio.votacao.dto.pauta.CriarPautaRequest;
 import com.desafio.votacao.dto.pauta.PautaResponse;
 import com.desafio.votacao.entity.Pauta;
 import com.desafio.votacao.repository.PautaRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
+@Slf4j
 @Service
 public class PautaService {
 
@@ -24,6 +27,11 @@ public class PautaService {
         );
 
         var pautaSalva = pautaRepository.save(pauta);
+
+        log.info(
+                "Pauta criada com sucesso!. pautaId={}",
+                pautaSalva.getId()
+        );
 
         return new PautaResponse(
                 pautaSalva.getId(),

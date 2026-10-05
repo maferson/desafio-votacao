@@ -13,12 +13,14 @@ import com.desafio.votacao.exception.RecursoNaoEncontradoException;
 import com.desafio.votacao.repository.PautaRepository;
 import com.desafio.votacao.repository.SessaoVotacaoRepository;
 import com.desafio.votacao.repository.VotoRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 
+@Slf4j
 @Service
 public class VotoService {
 
@@ -55,6 +57,11 @@ public class VotoService {
         OffsetDateTime agora = OffsetDateTime.now();
 
         if (!agora.isBefore(sessao.getFim())) {
+            
+            log.warn(
+                    "Tentativa de voto de Sessão encerrado. pautaId={}",
+                    pautaId
+            );
             throw new ConflitoNegocioException(
                     "Sessão de votação encerrada"
             );
@@ -66,6 +73,11 @@ public class VotoService {
                 pautaId,
                 associadoId
         )) {
+
+            log.warn(
+                    "Tentativa de voto duplicado. pautaId={}",
+                    pautaId
+            );
             throw new ConflitoNegocioException(
                     "Associado já votou nesta pauta"
             );
@@ -75,6 +87,11 @@ public class VotoService {
                 associadoClient.consultarSituacao(associadoId);
 
         if (status != StatusVotoAssociado.ABLE_TO_VOTE) {
+
+            log.warn(
+                    "Voto rejeitadi por inelegibilidade do associado. pautaId={}",
+                    pautaId
+            );
             throw new RecursoNaoEncontradoException(
                     "Associado não está apto a votar"
             );
@@ -88,6 +105,11 @@ public class VotoService {
 
         try {
             Voto votoSalvo = votoRepository.saveAndFlush(voto);
+
+            log.debug(
+                    "Voto registrado com sucesso. pautaId, votoId={}",
+                    votoSalvo.getId()
+            );
 
             return new VotoResponse(
                     votoSalvo.getId(),

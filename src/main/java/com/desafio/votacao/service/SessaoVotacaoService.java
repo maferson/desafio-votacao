@@ -7,12 +7,14 @@ import com.desafio.votacao.exception.ConflitoNegocioException;
 import com.desafio.votacao.exception.RecursoNaoEncontradoException;
 import com.desafio.votacao.repository.PautaRepository;
 import com.desafio.votacao.repository.SessaoVotacaoRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 
+@Slf4j
 @Service
 public class SessaoVotacaoService {
 
@@ -42,6 +44,12 @@ public class SessaoVotacaoService {
                 );
 
         if (sessaoVotacaoRepository.existsByPauta_Id(pautaId)) {
+
+            log.warn(
+                    "Tentativa de abrir segunda sessão para a pauta. pautdaId={}",
+                    pautaId
+            );
+
             throw new ConflitoNegocioException(
                     "A pauta já possui uma sessão de votação"
             );
@@ -63,6 +71,13 @@ public class SessaoVotacaoService {
         try {
             var sessaoSalva = sessaoVotacaoRepository.saveAndFlush(sessao);
 
+            log.info(
+                    "Sessão votação aberta. pautaId={}, sessaoId={}, fim={}",
+                    pautaId,
+                    sessao.getId(),
+                    sessao.getFim()
+            );
+
             return new SessaoVotacaoResponse(
                     sessaoSalva.getId(),
                     pautaId,
@@ -70,6 +85,12 @@ public class SessaoVotacaoService {
                     sessaoSalva.getFim()
             );
         } catch (DataIntegrityViolationException exception) {
+
+            log.warn(
+                    "Conflito ao abrir sessão para a pauta. pautaId={}",
+                    pautaId
+            );
+
             throw new ConflitoNegocioException(
                     "A pauta já possui uma sessão de votação"
             );
